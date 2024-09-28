@@ -315,16 +315,16 @@ def exponential_decay(
 
 def cosine_decay_schedule(
     init_value: float,
-    decay_steps: int,
+    transition_steps: int,
     alpha: float = 0.0,
     exponent: float = 1.0,
 ) -> base.Schedule:
   r"""Returns a function which implements cosine learning rate decay.
 
   This schedule smoothly decreases the learning rate over a specified number of
-  steps (``decay_steps``). The decay follows a cosine function, with an optional
-  exponent to modify the decay curve. A minimum value (``alpha``) ensures the
-  learning rate does not drop entirely to zero.
+  steps (``transition_steps``). The decay follows a cosine function, with an 
+  optional exponent to modify the decay curve. A minimum value (``alpha``) 
+  ensures the learning rate does not drop entirely to zero.
 
   More precisely, the learning rate at iteration :math:`t` is given by:
 
@@ -335,8 +335,9 @@ def cosine_decay_schedule(
       I \alpha, & \text{if } t > T 
     \end{cases}
 
-  where :math:`T` is the number of decay steps (``decay_steps``), :math:`p` is
-  the ``exponent`` and :math:`I` is the initial value (``init_value``).
+  where :math:`T` is the number of transition steps (``transition_steps``),
+  :math:`p` is the ``exponent`` and :math:`I` is the initial value 
+  (``init_value``).
 
   References:
     Loshchilov et al., `SGDR: Stochastic Gradient Descent with Warm Restarts
@@ -344,12 +345,12 @@ def cosine_decay_schedule(
 
   Args:
     init_value: An initial value for the learning rate.
-    decay_steps: Positive integer - the number of steps for which to apply
-      the decay for.
+    transition_steps: Positive integer. The number of steps for which the
+    cosine annealing is applied.
     alpha: The minimum value of the multiplier used to adjust the
       learning rate. Defaults to 0.0.
     exponent:  The default decay is ``0.5 * (1 + cos(pi * t/T))``, where 
-      ``t`` is the current timestep and ``T`` is the ``decay_steps``. The
+      ``t`` is the current timestep and ``T`` is the ``transition_steps``. The
       exponent modifies this to be ``(0.5 * (1 + cos(pi * t/T))) ** exponent``.
       Defaults to 1.0.
 
@@ -357,21 +358,21 @@ def cosine_decay_schedule(
     schedule
       A function that maps step counts to values.
   """
-  if not decay_steps > 0:
+  if not transition_steps > 0:
     raise ValueError(
-        'The cosine_decay_schedule requires positive decay_steps, got'
-        f' {decay_steps=}.'
+        'The cosine_decay_schedule requires positive transition_steps, got'
+        f' {transition_steps=}.'
     )
 
   def schedule(count):
     # Avoid int -> int32 overflow in jitted code.
-    nonlocal decay_steps
-    decay_steps, count = jax.tree.map(
-        lambda x: float(x) if isinstance(x, int) else x, (decay_steps, count)
+    nonlocal transition_steps
+    transition_steps, count = jax.tree.map(
+      lambda x: float(x) if isinstance(x, int) else x, (transition_steps, count)
     )
 
-    count = jnp.minimum(count, decay_steps)
-    cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * count / decay_steps))
+    count = jnp.minimum(count, transition_steps)
+    cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * count / transition_steps))
     decayed = (1 - alpha) * cosine_decay**exponent + alpha
     return init_value * decayed
 
@@ -575,7 +576,7 @@ def warmup_cosine_decay_schedule(
     init_value: float,
     peak_value: float,
     warmup_steps: int,
-    decay_steps: int,
+    transition_steps: int,
     end_value: float = 0.0,
     exponent: float = 1.0,
 ) -> base.Schedule:
@@ -585,14 +586,14 @@ def warmup_cosine_decay_schedule(
     init_value: Initial value for the scalar to be annealed.
     peak_value: Peak value for scalar to be annealed at end of warmup.
     warmup_steps: Positive integer, the length of the linear warmup.
-    decay_steps: Positive integer, the total length of the schedule. Note that
-      this includes the warmup time, so the number of steps during which cosine
-      annealing is applied is ``decay_steps - warmup_steps``.
+    transition_steps: Positive integer, the total length of the schedule.
+      Note that this includes the warmup time, so the number of steps during
+      which cosine annealing is applied is ``transition_steps - warmup_steps``.
     end_value: End value of the scalar to be annealed.
     exponent: The default decay is ``0.5 * (1 + cos(pi t/T))``, where
-      ``t`` is the current timestep and ``T`` is ``decay_steps``. The exponent
-      modifies this to be ``(0.5 * (1 + cos(pi * t/T))) ** exponent``. Defaults
-      to 1.0.
+      ``t`` is the current timestep and ``T`` is ``transition_steps``. The
+      exponent modifies this to be ``(0.5 * (1 + cos(pi * t/T))) ** exponent``.
+      Defaults to 1.0.
 
   Returns:
     schedule
@@ -607,7 +608,7 @@ def warmup_cosine_decay_schedule(
       ),
       cosine_decay_schedule(
           init_value=peak_value,
-          decay_steps=decay_steps - warmup_steps,
+          transition_steps=transition_steps - warmup_steps,
           alpha=alpha,
           exponent=exponent,
       ),
@@ -676,8 +677,8 @@ def sgdr_schedule(
 
   Args:
     cosine_kwargs: An Iterable of dicts, where each element specifies the
-      arguments to pass to each cosine decay cycle. The ``decay_steps`` kwarg
-      will specify how long each cycle lasts for, and therefore when to
+      arguments to pass to each cosine decay cycle. The ``transition_steps``
+      kwarg will specify how long each cycle lasts for, and therefore when to
       transition to the next cycle.
 
   Returns:
@@ -689,6 +690,6 @@ def sgdr_schedule(
   step = 0
   for kwargs in cosine_kwargs:
     schedules += [warmup_cosine_decay_schedule(**kwargs)]
-    boundaries += [step + kwargs['decay_steps']]
-    step += kwargs['decay_steps']
+    boundaries += [step + kwargs['transition_steps']]
+    step += kwargs['transition_steps']
   return _join.join_schedules(schedules, boundaries[:-1])

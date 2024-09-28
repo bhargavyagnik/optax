@@ -368,7 +368,7 @@ class CosineDecayTest(chex.TestCase):
     schedule_fn = self.variant(
         _schedule.cosine_decay_schedule(
             init_value=0.1,
-            decay_steps=100,
+            transition_steps=100,
             alpha=0.0,
             exponent=2))
     output = schedule_fn(np.array([0, 10, 50, 75, 100]))
@@ -379,10 +379,10 @@ class CosineDecayTest(chex.TestCase):
 
   @chex.all_variants
   def test_with_giant_int_steps(self):
-    """Check cosine schedule decay with decay_steps not fitting into int32."""
+    """Check cosine schedule decay with transition_steps exceeding int32"""
     schedule_fn = self.variant(
         _schedule.cosine_decay_schedule(
-            init_value=1000., decay_steps=int(1e10), alpha=0.0, exponent=1
+            init_value=1000., transition_steps=int(1e10), alpha=0.0, exponent=1
         )
     )
     output = schedule_fn(int(1e9))
@@ -401,7 +401,7 @@ class WarmupCosineDecayTest(chex.TestCase):
         init_value=init_value,
         peak_value=peak_value,
         warmup_steps=100,
-        decay_steps=1000,
+        transition_steps=1000,
         end_value=end_value,
     ))
 
@@ -417,7 +417,7 @@ class WarmupCosineDecayTest(chex.TestCase):
         peak_value=1.21,
         end_value=-3.0,
         warmup_steps=50,
-        decay_steps=100,
+        transition_steps=100,
         exponent=2))
     output = schedule_fn(np.array([0, 10, 50, 75, 100]))
     np.testing.assert_allclose(
@@ -438,7 +438,7 @@ class WarmupCosineDecayTest(chex.TestCase):
             peak_value=0,
             end_value=-3.0,
             warmup_steps=50,
-            decay_steps=100,
+            transition_steps=100,
             exponent=2,
         )
     )
@@ -458,7 +458,7 @@ class SGDRTest(chex.TestCase):
     """Check cosine schedule decay for the entire training schedule."""
     lr_kwargs = []
     for step, lr in zip([2e3, 3e3, 5e3], [lr0, lr1, lr2]):
-      lr_kwargs += [dict(decay_steps=int(step), peak_value=lr,
+      lr_kwargs += [dict(transition_steps=int(step), peak_value=lr,
                          init_value=0, end_value=0.0, warmup_steps=500)]
     schedule_fn = self.variant(_schedule.sgdr_schedule(lr_kwargs))
     np.testing.assert_allclose(lr0, schedule_fn(500))
